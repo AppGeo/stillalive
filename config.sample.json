@@ -1,10 +1,10 @@
 {
   "key": "foobar",
   "smtp": {
+    "service": "something",
     "auth":{
       "user": "user",
       "pass": "pass"
     }
-  },
-  "timeouts": {}
+  }
 }
