@@ -26,7 +26,7 @@ module.exports = function (config, inport) {
         bad: 'request'
       });
     }
-    if (req.params.id in config.timeouts) {
+    if (req.params.id in timeouts) {
       console.log('canceling timeout');
       clearTimeout(timeouts[req.params.id]);
       delete timeouts[req.params.id];
