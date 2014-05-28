@@ -1,6 +1,6 @@
 {
   "name": "stillalive",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "",
   "main": "server.js",
   "dependencies": {
@@ -10,7 +10,6 @@
     "morgan": "~1.1.1",
     "nodemailer": "~0.6.5"
   },
-
   "bin": "./cli.js",
   "devDependencies": {},
   "scripts": {
