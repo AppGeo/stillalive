@@ -1,0 +1,10 @@
+{
+  "key": "foobar",
+  "smtp": {
+    "auth":{
+      "user": "user",
+      "pass": "pass"
+    }
+  },
+  "timeouts": {}
+}
