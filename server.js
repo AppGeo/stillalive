@@ -4,7 +4,7 @@ var bodyParser = require('body-parser');
 var nodemailer = require("nodemailer");
 var interval = require('interval');
 var config = require('./config.json');
-var mandrill = nodemailer.createTransport("Mandrill", config.smtp);
+var mandrill = nodemailer.createTransport("SMTP", config.smtp);
 var app = express();
 app.use(morgan('dev'));
 app.use(bodyParser());
