@@ -23,20 +23,33 @@ module.exports = function (config, inport) {
   app.put('/still/alive/:id', function (req, res) {
     if (req.body.key !== config.key) {
       return res.json(400, {
-        bad: 'request'
+        error: 'bad request'
       });
     }
     if (req.params.id in timeouts) {
-      console.log('canceling timeout');
       clearTimeout(timeouts[req.params.id]);
       delete timeouts[req.params.id];
     }
-    console.log('setting timeout for ', req.body.interval);
     timeouts[req.params.id] = setTimeout(function () {
       sendEmail(req.body.email);
       delete timeouts[req.params.id]; 
     }, interval(req.body.interval));
-    res.json({ok: true});
+    res.json({'timeout set': req.body.interval});
+  });
+  app.put('/clear/:id', function (req, res) {
+    if (req.body.key !== config.key) {
+      return res.json(400, {
+        error: 'bad request'
+      });
+    }
+    if (req.params.id in timeouts) {
+      clearTimeout(timeouts[req.params.id]);
+      delete timeouts[req.params.id];
+      return res.json({'cleared': true});
+    }
+    res.json(400, {
+        error: 'no such timeout'
+      });
   });
 
   console.log('app is listening on ' + port);
