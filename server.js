@@ -2,21 +2,21 @@
 var express = require('express');
 var morgan  = require('morgan');
 var bodyParser = require('body-parser');
-var nodemailer = require('nodemailer');
 var interval = require('interval');
+var send = require('./send');
 module.exports = function (config, inport) {
   var timeouts = {};
-  var mandrill = nodemailer.createTransport('SMTP', config.smtp);
+  var mandrill = send(config.smtp.auth.pass);
   var app = express();
   app.use(morgan('dev'));
   app.use(bodyParser());
   var port = inport || process.env.PORT || 3000;
   function sendEmail(opts) {
-    mandrill.sendMail(opts, function (err, resp) {
+    mandrill(opts, function (err, resp) {
       if (err) {
         console.log(err);
       } else {
-        console.log('email sent');
+        console.log(resp);
       }
     });
   }
