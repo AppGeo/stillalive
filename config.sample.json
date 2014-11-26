@@ -1,7 +1,7 @@
 {
   "key": "foobar",
   "smtp": {
-    "service": "something",
+    "service": "Mandrill",
     "auth":{
       "user": "user",
       "pass": "pass"
