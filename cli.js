@@ -11,8 +11,8 @@ fs.readFile(configPath, function (err, resp) {
   }
   var config = JSON.parse(resp.toString());
   switch (len) {
-    case 3: return mail(config);
-    case 4: return mail(config, process.argv[3]);
+    case 4: return mail(config.key, config.api);
+    case 5: return mail(config.key, config.api, process.argv[3]);
     default: throw new TypeError('wrong number of arguments');
   }
 });

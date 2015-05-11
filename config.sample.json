@@ -1,10 +1,4 @@
 {
   "key": "foobar",
-  "smtp": {
-    "service": "Mandrill",
-    "auth":{
-      "user": "user",
-      "pass": "pass"
-    }
-  }
+  "api": "apikey"
 }
