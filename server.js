@@ -26,7 +26,9 @@ module.exports = function (key, apiKey, inport) {
       }
     });
   }
-
+  app.get('/', function (req, res) {
+    res.send('ok');
+  });
   app.put('/still/alive/:id', function (req, res) {
     if (!testKey(req.body.key)) {
       return res.status(400).json({
