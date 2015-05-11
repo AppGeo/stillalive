@@ -3,6 +3,15 @@ still alive
 
 Confirm a process is still alive, and if it isn't, send an email about it.
 
+Only works with mandrill so the config needs to be
+
+```js
+{
+  "key": "server key",
+  "api": "mandrill api key"
+}
+```
+
 `npm install -g stillalive`
 
 `stillalive ./path/to/config port`
@@ -17,7 +26,7 @@ the body of your request should be json with
 
 ```json
 {
-  "key": "hex encoded server key (set in your config file)",
+  "key": "server key (set in your config file)",
   "email": {
     "from_email": "you@domain.tld",
     "to": [
