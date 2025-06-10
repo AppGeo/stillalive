@@ -3,7 +3,7 @@ still alive
 
 Confirm a process is still alive, and if it isn't, send an email about it.
 
-Now works with any SMTP provider or Mandrill. If using SMTP, specify your SMTP provider in your json such as:
+This now works with any SMTP provider or Mandrill. If using SMTP, specify your SMTP provider in your json such as:
 
 ```js
 {

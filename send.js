@@ -4,11 +4,8 @@ const { URL } = require('url');
 var nodemailer = require('nodemailer');
 
 module.exports = function (config) {
-  console.log(config);
-  console.log('send.js config type:', typeof config);
-
   if (config.service === 'mandrill') {
-    // If config is a string, assume it's the Mandrill API key
+    //If you've specified mandrill, use the mandrill API.
     var apiKey = config.accessKeyId;
     return function (opts, cb) {
       var wrapper = {};
@@ -38,7 +35,7 @@ module.exports = function (config) {
     };
   };
 
-  //Otherwise assume it's an SMTP config object
+  // Otherwise configure an SMTP config object
   var smtpConfig = {
     host: config.service,
     port: config.port || 587,
