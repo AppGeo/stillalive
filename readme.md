@@ -3,7 +3,9 @@ still alive
 
 Confirm a process is still alive, and if it isn't, send an email about it.
 
-This now works with any SMTP provider or Mandrill. If using SMTP, specify your SMTP provider in your json such as:
+This now works with any SMTP provider or Mandrill. 
+
+If using SMTP, specify your SMTP provider in your JSON such as:
 
 ```js
 {
@@ -14,6 +16,19 @@ This now works with any SMTP provider or Mandrill. If using SMTP, specify your S
         "user":"user@example.com",
         "pass":"insert_password_here"
       }
+    }
+  }
+  
+```
+
+If using mandrill:
+
+```js
+{
+    "key": "my-secret-key",
+    "smtp":{
+      "service":"mandrill",
+      "accessKeyId": "md-EgWVMWEjZF2KdSlocGs2Aw"
     }
   }
   
