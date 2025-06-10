@@ -3,13 +3,35 @@ still alive
 
 Confirm a process is still alive, and if it isn't, send an email about it.
 
-Only works with mandrill so the config needs to be
+This now works with any SMTP provider or Mandrill. 
+
+If using SMTP, specify your SMTP provider in your JSON such as:
 
 ```js
 {
-  "key": "server key",
-  "api": "mandrill api key"
-}
+    "key": "my-secret-key",
+    "smtp":{
+      "service":"smtp-mail.outlook.com",
+      "auth": {
+        "user":"user@example.com",
+        "pass":"insert_password_here"
+      }
+    }
+  }
+  
+```
+
+If using mandrill:
+
+```js
+{
+    "key": "my-secret-key",
+    "smtp":{
+      "service":"mandrill",
+      "accessKeyId": "md-EgWVMWEjZF2KdSlocGs2Aw"
+    }
+  }
+  
 ```
 
 `npm install -g stillalive`
@@ -22,7 +44,7 @@ port is optional, defaults to process.env.PORT followed by 3000.
 
 send a put to `host/still/alive/:id` where id is your app specific timeout's name
 
-the body of your request should be json with
+the body of your request should be json as follows. Note -- if using an SMTP provider instead of Mandrill, do not use an array for the to email addresses.
 
 ```json
 {
