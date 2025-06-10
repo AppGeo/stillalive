@@ -7,25 +7,26 @@ var interval = require('interval');
 
 var send = require('./send');
 
-module.exports = function (key, apiKey, inport) {
+module.exports = function (key, emailConfig, inport) {
   var timeouts = {};
-  var mandrill = send(apiKey);
+  const emailSender = send(emailConfig);
   var testKey = createEquals(key);
   var app = express();
   var port = inport || process.env.PORT || 3000;
 
   app.use(morgan('dev'));
-  app.use(bodyParser());
+  app.use(bodyParser.json());
 
   function sendEmail(opts) {
-    mandrill(opts, function (err, resp) {
+    emailSender(opts, function (err, resp) {
       if (err) {
-        console.log(err);
+        console.error('Email error:', err);
       } else {
-        console.log(resp);
+        console.log('Email sent:', resp);
       }
     });
   }
+
   app.get('/', function (req, res) {
     res.send('ok');
   });
@@ -75,11 +76,11 @@ module.exports = function (key, apiKey, inport) {
   return app;
 };
 function createEquals(origKey) {
-  var orig = new Buffer(origKey);
+  var orig = Buffer.from(origKey);
   var len = orig.length;
   return testKey;
   function testKey(compare) {
-    var comp = new Buffer(compare);
+    var comp = Buffer.from(compare);
     if (comp.length !== len) {
       return false;
     }
