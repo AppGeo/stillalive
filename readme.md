@@ -7,17 +7,14 @@ This works with any SMTP provider, Mandrill, Resend, or SendGrid.
 
 ## Installation
 
-stillalive can be used two ways (see [Usage](#usage)): embedded in your own
-Node app as a library, or run directly as a CLI. Install accordingly:
+stillalive can be used two ways (see [Usage](#usage)): embedded in your own Node app as a library, or run directly as a CLI. Install accordingly:
 
 | How you'll use it | Install |
 | --- | --- |
-| As a library (require it in your code) | `npm install stillalive` |
+| As a library (import it in your code) | `npm install stillalive` |
 | As a CLI (run the `stillalive` command) | `npm install -g stillalive` |
 
-Resend and SendGrid additionally need their official SDK, which ships as an
-**optional peer dependency** so it only gets installed if you actually use it
-(SMTP and Mandrill need nothing extra):
+Resend and SendGrid additionally need their official SDK, which ships as an **optional peer dependency** so it only gets installed if you actually use it (SMTP and Mandrill need nothing extra):
 
 | Provider | Extra install |
 | --- | --- |
@@ -25,32 +22,26 @@ Resend and SendGrid additionally need their official SDK, which ships as an
 | Resend | `npm install resend` |
 | SendGrid | `npm install @sendgrid/mail` |
 
-The SDK is lazily `require()`d only when its service is selected, so the package
-works fine with neither installed. If you configure `resend` or `sendgrid`
-without installing its SDK, stillalive fails fast at startup with a clear error
-telling you the exact `npm install` command to run.
+The SDK is loaded via a dynamic `import()` only when its service is selected, so the package works fine with neither installed. If you configure `resend` or `sendgrid` without installing its SDK, stillalive fails fast at startup with a clear error telling you the exact `npm install` command to run.
 
 ## Usage
 
-Both strategies take the same two pieces of configuration: a `key` (a shared
-secret callers must present) and a provider config object (see
-[Configuring an email provider](#configuring-an-email-provider)).
+Both strategies take the same two pieces of configuration: a `key` (a shared secret callers must present) and a provider config object (see [Configuring an email provider](#configuring-an-email-provider)).
 
 ### As a library
 
-`require('stillalive')` returns a factory: `stillalive(key, provider, port)`.
-It starts an Express server and returns the `app`, so you can add your own
-routes:
+`import stillalive from 'stillalive'` returns an async factory: `await stillalive(key, provider, port)`. It starts an Express server and returns the `app`, so you can add your own routes:
 
 ```js
-const stillalive = require('stillalive');
-const config = require('./config.emailProvider.json');
+import stillalive from 'stillalive';
+import { readFile } from 'node:fs/promises';
 
+const config = JSON.parse(await readFile('./config.emailProvider.json', 'utf8'));
 const port = process.env.PORT || 8080;
 
-const app = stillalive(config.key, config.provider, port);
+const app = await stillalive(config.key, config.provider, port);
 
-app.get('/health', function (req, res) {
+app.get('/health', (_req, res) => {
   res.status(200).send('OK');
 });
 ```
@@ -65,9 +56,7 @@ Point the `stillalive` command at a JSON config file:
 stillalive ./path/to/config.json [port]
 ```
 
-`port` is optional and defaults to `process.env.PORT`, then `3000`. The config
-file holds the `key` and provider config (the provider object goes under
-`provider`; the legacy keys `smtp` and `api` are still accepted):
+`port` is optional and defaults to `process.env.PORT`, then `3000`. The config file holds the `key` and provider config (the provider object goes under `provider`; the legacy keys `smtp` and `api` are still accepted):
 
 ```json
 {
@@ -84,14 +73,9 @@ file holds the `key` and provider config (the provider object goes under
 
 ## Configuring an email provider
 
-The provider config object selects the email service via its `service` field.
-The examples below show it under the `provider` key of a CLI config file; when
-used as a library, pass the inner object as the second argument to
-`stillalive(key, provider, port)`. Ready-to-copy config files for each provider
-live in the [`examples/`](examples) folder.
+The provider config object selects the email service via its `service` field. The examples below show it under the `provider` key of a CLI config file; when used as a library, pass the inner object as the second argument to `stillalive(key, provider, port)`. Ready-to-copy config files for each provider live in the [`examples/`](examples) folder.
 
-If using SMTP, name your SMTP host as the `service` (see
-[examples/config.smtp.json](examples/config.smtp.json)):
+If using SMTP, name your SMTP host as the `service` (see [examples/config.smtp.json](examples/config.smtp.json)):
 
 ```js
 {
@@ -106,8 +90,7 @@ If using SMTP, name your SMTP host as the `service` (see
 }
 ```
 
-If using Mandrill (see
-[examples/config.mandrill.json](examples/config.mandrill.json)):
+If using Mandrill (see [examples/config.mandrill.json](examples/config.mandrill.json)):
 
 ```js
 {
@@ -121,8 +104,7 @@ If using Mandrill (see
 
 (For Mandrill, `accessKeyId` is also accepted as a legacy alias for `apiKey`.)
 
-If using Resend (requires `npm install resend`; see
-[examples/config.resend.json](examples/config.resend.json)):
+If using Resend (requires `npm install resend`; see [examples/config.resend.json](examples/config.resend.json)):
 
 ```js
 {
@@ -134,8 +116,7 @@ If using Resend (requires `npm install resend`; see
 }
 ```
 
-If using SendGrid (requires `npm install @sendgrid/mail`; see
-[examples/config.sendgrid.json](examples/config.sendgrid.json)):
+If using SendGrid (requires `npm install @sendgrid/mail`; see [examples/config.sendgrid.json](examples/config.sendgrid.json)):
 
 ```js
 {
@@ -147,18 +128,13 @@ If using SendGrid (requires `npm install @sendgrid/mail`; see
 }
 ```
 
-Whatever provider you configure, requests use the same canonical `email` object
-(see [email object](#email-object) below) -- stillalive maps it to each
-provider's native format for you.
+Whatever provider you configure, requests use the same canonical `email` object (see [email object](#email-object) below) -- stillalive maps it to each provider's native format for you.
 
 # usage
 
 send a put to `host/still/alive/:id` where id is your app specific timeout's name
 
-The body of your request should be json as follows. The `email` object uses a
-single canonical shape that works the same no matter which provider you've
-configured -- stillalive maps it internally to SMTP, Mandrill, Resend or
-SendGrid:
+The body of your request should be json as follows. The `email` object uses a single canonical shape that works the same no matter which provider you've configured -- stillalive maps it internally to SMTP, Mandrill, Resend or SendGrid:
 
 ```json
 {
@@ -202,10 +178,6 @@ Provide `text`, `html`, or both. A fuller example:
 }
 ```
 
-Legacy Mandrill-style payloads (`from_email`/`from_name` plus a `to` array of
-`{ "type", "email", "name" }`) are still accepted, so existing integrations keep
-working without changes.
+Legacy Mandrill-style payloads (`from_email`/`from_name` plus a `to` array of `{ "type", "email", "name" }`) are still accepted, so existing integrations keep working without changes.
 
-The `interval` field accepts a number of milliseconds, or an object with any of
-`weeks`, `days`, `hours`, `minutes`, `seconds`, and `milliseconds` (which are
-summed). For example, `{ "minutes": 5 }` or `{ "hours": 1, "minutes": 30 }`.
+The `interval` field accepts a number of milliseconds, or an object with any of `weeks`, `days`, `hours`, `minutes`, `seconds`, and `milliseconds` (which are summed). For example, `{ "minutes": 5 }` or `{ "hours": 1, "minutes": 30 }`.
