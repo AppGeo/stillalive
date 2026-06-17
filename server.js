@@ -2,8 +2,6 @@
 
 var express = require('express');
 var morgan = require('morgan');
-var bodyParser = require('body-parser');
-var interval = require('interval');
 
 var send = require('./send');
 
@@ -15,7 +13,7 @@ module.exports = function (key, emailConfig, inport) {
   var port = inport || process.env.PORT || 3000;
 
   app.use(morgan('dev'));
-  app.use(bodyParser.json());
+  app.use(express.json());
 
   function sendEmail(opts) {
     emailSender(opts, function (err, resp) {
@@ -45,7 +43,7 @@ module.exports = function (key, emailConfig, inport) {
     timeouts[req.params.id] = setTimeout(function () {
       sendEmail(req.body.email);
       delete timeouts[req.params.id];
-    }, interval(req.body.interval));
+    }, toMilliseconds(req.body.interval));
 
     res.json({
       'timeout set': req.body.interval
@@ -91,4 +89,23 @@ function createEquals(origKey) {
     }
     return out === 0;
   }
+}
+
+// Convert an interval into milliseconds. Accepts a number (passed through as
+// milliseconds) or an object with any of weeks/days/hours/minutes/seconds/
+// milliseconds. Replaces the former `interval` dependency, which is unmaintained
+// and relied on the now-removed util.isDate.
+function toMilliseconds(i) {
+  if (typeof i === 'number') {
+    return i;
+  }
+  if (!i) {
+    return NaN;
+  }
+  var weeks = i.weeks || 0;
+  var days = (i.days || 0) + weeks * 7;
+  var hours = (i.hours || 0) + days * 24;
+  var minutes = (i.minutes || 0) + hours * 60;
+  var seconds = (i.seconds || 0) + minutes * 60;
+  return (i.milliseconds || 0) + seconds * 1000;
 }
