@@ -1,5 +1,3 @@
-'use strict';
-
 // A single canonical email shape is accepted from callers regardless of the
 // configured provider, then mapped to each provider's native format. This keeps
 // the public request body identical across SMTP, Mandrill, Resend and SendGrid.
@@ -221,4 +219,4 @@ const formatEmail = {
   toSendgrid: (email) => toSendgrid(normalizeEmail(email))
 };
 
-module.exports = formatEmail;
+export default formatEmail;

@@ -1,8 +1,10 @@
 {
   "name": "stillalive",
   "version": "3.0.0",
-  "description": "",
+  "description": "Dead man's switch email alert server",
+  "type": "module",
   "main": "server.js",
+  "exports": "./server.js",
   "dependencies": {
     "express": "^5.2.1",
     "morgan": "^1.11.0",
@@ -21,7 +23,7 @@
     }
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "bin": "./cli.js",
   "scripts": {

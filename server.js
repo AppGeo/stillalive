@@ -1,48 +1,45 @@
-'use strict';
+import express from 'express';
+import morgan from 'morgan';
 
-var express = require('express');
-var morgan = require('morgan');
-
-var send = require('./send');
+import createSender from './send.js';
 
 // Exported factory: starts an Express "dead man's switch" server.
 //   key         - shared secret callers must present to arm/clear timeouts
 //   emailConfig - provider config passed to ./send (selects SMTP/Mandrill/etc.)
-//   inport      - optional port; falls back to PORT env var, then 3000
+//   listenPort  - optional port; falls back to PORT env var, then 3000
 //
 // Clients periodically PUT /still/alive/:id to (re)arm a per-id timer. If a
 // client stops checking in, the timer fires and an alert email is sent.
-module.exports = function (key, emailConfig, inport) {
+export default async function createServer(key, emailConfig, listenPort) {
   // Active timers keyed by id; each is replaced/cleared on the next check-in.
-  var timeouts = {};
-  const emailSender = send(emailConfig);
-  var testKey = createEquals(key);
-  var app = express();
-  var port = inport || process.env.PORT || 3000;
+  const timeouts = {};
+  const emailSender = await createSender(emailConfig);
+  const testKey = createEquals(key);
+  const app = express();
+  const port = listenPort || process.env.PORT || 3000;
 
   app.use(morgan('dev'));
   app.use(express.json());
 
-  function sendEmail(opts) {
-    emailSender(opts, function (err, resp) {
+  const sendEmail = (opts) => {
+    emailSender(opts, (err, resp) => {
       if (err) {
         console.error('Email error:', err);
       } else {
         console.log('Email sent:', resp);
       }
     });
-  }
+  };
 
-  app.get('/', function (req, res) {
+  app.get('/', (_req, res) => {
     res.send('ok');
   });
+
   // Arm (or re-arm) the watchdog timer for :id. Each call resets the countdown;
   // the email only fires if no further check-in arrives before it elapses.
-  app.put('/still/alive/:id', function (req, res) {
+  app.put('/still/alive/:id', (req, res) => {
     if (!testKey(req.body.key)) {
-      return res.status(400).json({
-        error: 'bad request'
-      });
+      return res.status(400).json({ error: 'bad request' });
     }
 
     // Cancel any existing timer for this id so we restart the countdown clean.
@@ -53,62 +50,54 @@ module.exports = function (key, emailConfig, inport) {
 
     // Schedule the alert. If this id checks in again first, the timer above is
     // cleared and this callback never runs.
-    timeouts[req.params.id] = setTimeout(function () {
+    timeouts[req.params.id] = setTimeout(() => {
       sendEmail(req.body.email);
       delete timeouts[req.params.id];
     }, toMilliseconds(req.body.interval));
 
-    res.json({
-      'timeout set': req.body.interval
-    });
+    res.json({ 'timeout set': req.body.interval });
   });
 
   // Manually cancel a pending timer for :id (e.g. on a clean shutdown).
-  app.put('/clear/:id', function (req, res) {
+  app.put('/clear/:id', (req, res) => {
     if (!testKey(req.body.key)) {
-      return res.status(400).json({
-        error: 'bad request'
-      });
+      return res.status(400).json({ error: 'bad request' });
     }
 
     if (req.params.id in timeouts) {
       clearTimeout(timeouts[req.params.id]);
       delete timeouts[req.params.id];
-
-      return res.json({'cleared': true});
+      return res.json({ cleared: true });
     }
-    res.status(400).json({
-      error: 'no such timeout'
-    });
+    res.status(400).json({ error: 'no such timeout' });
   });
 
-  console.log('app is listening on ' + port);
+  console.log(`app is listening on ${port}`);
   app.listen(port);
 
   return app;
-};
+}
 
 // Build a comparator that checks a supplied key against the configured one.
 // The comparison is constant-time (XORs every byte and ORs the differences)
 // rather than short-circuiting, to avoid leaking the key via timing analysis.
 function createEquals(origKey) {
-  var orig = Buffer.from(origKey);
-  var len = orig.length;
-  return testKey;
-  function testKey(compare) {
-    var comp = Buffer.from(compare);
+  const orig = Buffer.from(origKey);
+  const len = orig.length;
+
+  return (compare) => {
+    const comp = Buffer.from(compare);
     // A length mismatch can't match; bail early (length isn't secret).
     if (comp.length !== len) {
       return false;
     }
-    var out = 0;
-    var i = -1;
+    let out = 0;
     // Accumulate any differing bits across all bytes; out stays 0 iff equal.
-    while (++i < len) {
+    for (let i = 0; i < len; i++) {
       out |= orig[i] ^ comp[i];
     }
     return out === 0;
-  }
+  };
 }
 
 // Convert an interval into milliseconds. Accepts a number (passed through as

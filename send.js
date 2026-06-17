@@ -4,78 +4,65 @@
 // `send(opts, cb)` callback regardless of provider. Each branch maps the
 // caller's canonical email (via ./normalize) into that provider's native shape
 // before sending, so the rest of the app only ever deals with one email format.
-'use strict';
-var https = require('https');
-const { URL } = require('url');
-var nodemailer = require('nodemailer');
-const formatEmail = require('./normalize');
 
-// Lazily require an optional SDK so it is only loaded (and only needs to be
+import nodemailer from 'nodemailer';
+import formatEmail from './normalize.js';
+
+// Lazily import an optional SDK so it is only loaded (and only needs to be
 // installed) when the matching email service is actually selected. This keeps
 // resend/@sendgrid/mail as optional peer deps -- users who don't use them never
 // have to install them. A missing module is rethrown as a clear, actionable
-// error; any other require error is propagated unchanged.
-function lazyRequire(moduleName, service) {
+// error; any other import error is propagated unchanged.
+async function lazyImport(moduleName, service) {
   try {
-    return require(moduleName);
+    return await import(moduleName);
   } catch (err) {
-    if (err && err.code === 'MODULE_NOT_FOUND') {
+    if (err?.code === 'ERR_MODULE_NOT_FOUND') {
       throw new Error(
-        'The "' + service + '" service requires the optional dependency "' +
-        moduleName + '", which is not installed. Install it with: npm install ' +
-        moduleName + ' (required only for the "' + service + '" service).'
+        `The "${service}" service requires the optional dependency "${moduleName}", which is not installed. Install it with: npm install ${moduleName} (required only for the "${service}" service).`
       );
     }
     throw err;
   }
 }
 
-// config.service selects the provider. Returns send(opts, cb) where opts is a
-// canonical email object (see ./normalize) and cb is (err, result).
-module.exports = function (config) {
+// config.service selects the provider. Returns a promise that resolves to
+// send(opts, cb) where opts is a canonical email object (see ./normalize)
+// and cb is (err, result).
+export default async function createSender(config) {
   if (config.service === 'mandrill') {
-    // Mandrill has no SDK dependency here; we POST directly to its REST API.
+    // Mandrill has no SDK dependency; we POST directly to its REST API using
+    // the built-in fetch (available globally in Node ≥18, stable by Node 24).
     // `apiKey` is the canonical field; `accessKeyId` is a legacy alias kept for
     // backward compatibility with older configs.
     const apiKey = config.apiKey || config.accessKeyId;
-    return function (opts, cb) {
-      // Mandrill wants { key, message } -- formatEmail.toMandrill builds it.
-      var wrapper = {};
-      wrapper.message = formatEmail.toMandrill(opts);
-      wrapper.key = apiKey;
-      var buff = new Buffer.from(JSON.stringify(wrapper));
-      var mandrillUrl = new URL('https://mandrillapp.com/api/1.0/messages/send.json');
-      var httpOptions = {
-        hostname: mandrillUrl.hostname,
-        path: mandrillUrl.pathname,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      };
-      var req = https.request(httpOptions, function (res) {
-        var data = '';
-        res.on('error',cb).on('data', function (d) {
-          data += d.toString();
-        }).on('end', function () {
-          cb(null, data);
-        });
+    return (opts, cb) => {
+      const body = JSON.stringify({
+        key: apiKey,
+        message: formatEmail.toMandrill(opts),
       });
-      req.on('error', cb);
-      req.write(buff);
-      req.end();
+      fetch('https://mandrillapp.com/api/1.0/messages/send.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      })
+        .then(async (res) => {
+          const data = await res.text();
+          cb(null, data);
+        })
+        .catch(cb);
     };
-  };
+  }
 
   if (config.service === 'resend') {
     // Lazily load the Resend SDK only when this service is selected.
-    const Resend = lazyRequire('resend', 'resend').Resend;
+    const Resend = (await lazyImport('resend', 'resend')).Resend;
     const resend = new Resend(config.apiKey || config.accessKeyId);
-    return function resendSender(opts, cb) {
+    return (opts, cb) => {
       // Resend's SDK resolves (instead of rejecting) on API errors, returning
       // { data, error } -- so we surface result.error through the callback.
       resend.emails.send(formatEmail.toResend(opts)).then((result) => {
-        if (result && result.error) {
+        if (result?.error) {
           return cb(result.error);
         }
         cb(null, result.data || result);
@@ -85,9 +72,9 @@ module.exports = function (config) {
 
   if (config.service === 'sendgrid') {
     // Lazily load the SendGrid SDK only when this service is selected.
-    const sgMail = lazyRequire('@sendgrid/mail', 'sendgrid');
+    const sgMail = await lazyImport('@sendgrid/mail', 'sendgrid');
     sgMail.setApiKey(config.apiKey || config.accessKeyId);
-    return function sendgridSender(opts, cb) {
+    return (opts, cb) => {
       // SendGrid rejects its promise on failure, so the second .then handler
       // (cb) receives any error directly.
       sgMail.send(formatEmail.toSendgrid(opts)).then((result) => {
@@ -97,21 +84,21 @@ module.exports = function (config) {
   }
 
   // Default: treat config.service as an SMTP host and send via nodemailer.
-  var smtpConfig = {
+  const smtpConfig = {
     host: config.service,
     port: config.port || 587,
     secure: false, // true for 465, false for other ports
     auth: {
       user: config.auth.user,
-      pass: config.auth.pass
-    }
-  }
+      pass: config.auth.pass,
+    },
+  };
   const transporter = nodemailer.createTransport(smtpConfig);
 
-  return function (opts, cb) {
-    transporter.sendMail(formatEmail.toNodemailer(opts), function (err, info) {
+  return (opts, cb) => {
+    transporter.sendMail(formatEmail.toNodemailer(opts), (err, info) => {
       if (err) return cb(err);
       cb(null, info);
     });
   };
-};
+}
