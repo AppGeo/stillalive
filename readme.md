@@ -43,15 +43,15 @@ It starts an Express server and returns the `app`, so you can add your own
 routes:
 
 ```js
-var port = process.env.PORT || 8080;
-var config = require('./config.json');
-var stillalive = require('stillalive');
-var pack = require('./package.json');
+const stillalive = require('stillalive');
+const config = require('./config.emailProvider.json');
 
-var app = stillalive(config.key, config.provider, port);
+const port = process.env.PORT || 8080;
 
-app.get('/version', function (req, res) {
-  res.send(pack.version);
+const app = stillalive(config.key, config.provider, port);
+
+app.get('/health', function (req, res) {
+  res.status(200).send('OK');
 });
 ```
 
@@ -87,9 +87,11 @@ file holds the `key` and provider config (the provider object goes under
 The provider config object selects the email service via its `service` field.
 The examples below show it under the `provider` key of a CLI config file; when
 used as a library, pass the inner object as the second argument to
-`stillalive(key, provider, port)`.
+`stillalive(key, provider, port)`. Ready-to-copy config files for each provider
+live in the [`examples/`](examples) folder.
 
-If using SMTP, name your SMTP host as the `service`:
+If using SMTP, name your SMTP host as the `service` (see
+[examples/config.smtp.json](examples/config.smtp.json)):
 
 ```js
 {
@@ -104,19 +106,23 @@ If using SMTP, name your SMTP host as the `service`:
 }
 ```
 
-If using Mandrill:
+If using Mandrill (see
+[examples/config.mandrill.json](examples/config.mandrill.json)):
 
 ```js
 {
   "key": "my-secret-key",
   "provider": {
     "service": "mandrill",
-    "accessKeyId": "md-EgWVMWEjZF2KdSlocGs2Aw"
+    "apiKey": "md-EgWVMWEjZF2KdSlocGs2Aw"
   }
 }
 ```
 
-If using Resend (requires `npm install resend`):
+(For Mandrill, `accessKeyId` is also accepted as a legacy alias for `apiKey`.)
+
+If using Resend (requires `npm install resend`; see
+[examples/config.resend.json](examples/config.resend.json)):
 
 ```js
 {
@@ -128,7 +134,8 @@ If using Resend (requires `npm install resend`):
 }
 ```
 
-If using SendGrid (requires `npm install @sendgrid/mail`):
+If using SendGrid (requires `npm install @sendgrid/mail`; see
+[examples/config.sendgrid.json](examples/config.sendgrid.json)):
 
 ```js
 {

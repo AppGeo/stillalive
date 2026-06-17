@@ -8,7 +8,7 @@
 var https = require('https');
 const { URL } = require('url');
 var nodemailer = require('nodemailer');
-var map = require('./normalize');
+const formatEmail = require('./normalize');
 
 // Lazily require an optional SDK so it is only loaded (and only needs to be
 // installed) when the matching email service is actually selected. This keeps
@@ -35,11 +35,13 @@ function lazyRequire(moduleName, service) {
 module.exports = function (config) {
   if (config.service === 'mandrill') {
     // Mandrill has no SDK dependency here; we POST directly to its REST API.
-    var apiKey = config.accessKeyId;
+    // `apiKey` is the canonical field; `accessKeyId` is a legacy alias kept for
+    // backward compatibility with older configs.
+    const apiKey = config.apiKey || config.accessKeyId;
     return function (opts, cb) {
-      // Mandrill wants { key, message } -- map.toMandrill builds the message.
+      // Mandrill wants { key, message } -- formatEmail.toMandrill builds it.
       var wrapper = {};
-      wrapper.message = map.toMandrill(opts);
+      wrapper.message = formatEmail.toMandrill(opts);
       wrapper.key = apiKey;
       var buff = new Buffer.from(JSON.stringify(wrapper));
       var mandrillUrl = new URL('https://mandrillapp.com/api/1.0/messages/send.json');
@@ -67,12 +69,12 @@ module.exports = function (config) {
 
   if (config.service === 'resend') {
     // Lazily load the Resend SDK only when this service is selected.
-    var Resend = lazyRequire('resend', 'resend').Resend;
-    var resend = new Resend(config.apiKey || config.accessKeyId);
-    return function (opts, cb) {
+    const Resend = lazyRequire('resend', 'resend').Resend;
+    const resend = new Resend(config.apiKey || config.accessKeyId);
+    return function resendSender(opts, cb) {
       // Resend's SDK resolves (instead of rejecting) on API errors, returning
       // { data, error } -- so we surface result.error through the callback.
-      resend.emails.send(map.toResend(opts)).then(function (result) {
+      resend.emails.send(formatEmail.toResend(opts)).then((result) => {
         if (result && result.error) {
           return cb(result.error);
         }
@@ -83,12 +85,12 @@ module.exports = function (config) {
 
   if (config.service === 'sendgrid') {
     // Lazily load the SendGrid SDK only when this service is selected.
-    var sgMail = lazyRequire('@sendgrid/mail', 'sendgrid');
+    const sgMail = lazyRequire('@sendgrid/mail', 'sendgrid');
     sgMail.setApiKey(config.apiKey || config.accessKeyId);
-    return function (opts, cb) {
+    return function sendgridSender(opts, cb) {
       // SendGrid rejects its promise on failure, so the second .then handler
       // (cb) receives any error directly.
-      sgMail.send(map.toSendgrid(opts)).then(function (result) {
+      sgMail.send(formatEmail.toSendgrid(opts)).then((result) => {
         cb(null, result);
       }, cb);
     };
@@ -107,7 +109,7 @@ module.exports = function (config) {
   const transporter = nodemailer.createTransport(smtpConfig);
 
   return function (opts, cb) {
-    transporter.sendMail(map.toNodemailer(opts), function (err, info) {
+    transporter.sendMail(formatEmail.toNodemailer(opts), function (err, info) {
       if (err) return cb(err);
       cb(null, info);
     });

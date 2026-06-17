@@ -12,7 +12,7 @@ fs.readFile(configPath, function (err, resp) {
   var config = JSON.parse(resp.toString());
   // The email provider config lives under `provider`. `smtp`/`api` are accepted
   // as fallbacks so config files written for older versions keep working.
-  var providerConfig = config.provider || config.smtp || config.api;
+  const providerConfig = config.provider || config.smtp || config.api;
   switch (len) {
     case 3: return mail(config.key, providerConfig);
     case 4: return mail(config.key, providerConfig, process.argv[3]);

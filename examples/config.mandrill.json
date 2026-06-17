@@ -1,0 +1,7 @@
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "mandrill",
+    "apiKey": "md-EgWVMWEjZF2KdSlocGs2Aw"
+  }
+}

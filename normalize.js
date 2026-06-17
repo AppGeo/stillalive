@@ -25,7 +25,7 @@
 // null when there is nothing usable). This is the one place that understands
 // all the shorthand forms a caller might send, so the rest of the module can
 // assume a consistent shape.
-function parseAddress(input) {
+const parseAddress = (input) => {
   // Covers null, undefined, and empty string -- there is no address to parse.
   if (!input) {
     return null;
@@ -35,7 +35,7 @@ function parseAddress(input) {
     // "Display Name <a@b.tld>" form. The regex captures the optional display
     // name (group 1, non-greedy) and the address inside the angle brackets
     // (group 2). A non-match means it's a bare address.
-    var match = input.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+    const match = input.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
     if (match) {
       return { email: match[2].trim(), name: match[1] || undefined };
     }
@@ -45,7 +45,7 @@ function parseAddress(input) {
     // Object form. Accept `email` (our canonical key) or `address` (the key
     // nodemailer uses) so either style of object can be passed in. Without an
     // address there is nothing to send to, so treat it as empty.
-    var email = input.email || input.address;
+    const email = input.email || input.address;
     if (!email) {
       return null;
     }
@@ -53,28 +53,28 @@ function parseAddress(input) {
   }
   // Any other type (number, boolean, etc.) is not a valid address.
   return null;
-}
+};
 
 // Parse an address field that may be a single address or an array of them into
 // a flat array of normalized { email, name } objects. Missing fields yield [].
-function parseAddressList(input) {
+const parseAddressList = (input) => {
   if (input === undefined || input === null) {
     return [];
   }
   // Wrap a lone address so the same map() handles both single and array input.
-  var list = Array.isArray(input) ? input : [input];
+  const list = Array.isArray(input) ? input : [input];
   // filter(Boolean) drops any entries that parseAddress rejected (returned null).
   return list.map(parseAddress).filter(Boolean);
-}
+};
 
 // Reduce a caller-supplied email object into the internal canonical shape that
 // every to<Provider> mapper below consumes. All address fields become arrays or
 // a single normalized object, so the mappers never have to re-handle shorthand.
-function normalizeEmail(email) {
+const normalizeEmail = (email) => {
   email = email || {};
   // Resolve the sender from either the canonical `from` or the legacy Mandrill
   // `from_email`/`from_name` pair, so older payloads keep working unchanged.
-  var from;
+  let from;
   if (email.from !== undefined) {
     from = email.from;
   } else if (email.from_email) {
@@ -91,11 +91,11 @@ function normalizeEmail(email) {
     text: email.text,
     html: email.html
   };
-}
+};
 
 // Copy whichever body parts are present onto a provider message. Shared by every
 // mapper so the text/html handling stays identical across providers.
-function setBody(msg, n) {
+const setBody = (msg, n) => {
   if (n.text !== undefined) {
     msg.text = n.text;
   }
@@ -103,58 +103,56 @@ function setBody(msg, n) {
     msg.html = n.html;
   }
   return msg;
-}
+};
 
 // The three as<Format> helpers below each render a normalized { email, name }
 // into the exact address representation a given provider's SDK expects. Each
 // returns undefined for a missing address so callers can leave the field unset.
 
 // Resend (and nodemailer) accept a single string: "Name <email>" or just "email".
-function asString(addr) {
+const asString = (addr) => {
   if (!addr) {
     return undefined;
   }
   return addr.name ? addr.name + ' <' + addr.email + '>' : addr.email;
-}
+};
 
 // nodemailer's object form uses `address` (not `email`) for the email key.
-function asNodemailer(addr) {
+const asNodemailer = (addr) => {
   if (!addr) {
     return undefined;
   }
   return addr.name ? { name: addr.name, address: addr.email } : addr.email;
-}
+};
 
 // SendGrid's EmailData form uses `email` for the email key.
-function asSendgrid(addr) {
+const asSendgrid = (addr) => {
   if (!addr) {
     return undefined;
   }
   return addr.name ? { name: addr.name, email: addr.email } : addr.email;
-}
+};
 
 // Build a function that tags an address with a Mandrill recipient type
 // ("to"/"cc"/"bcc"). Mandrill puts every recipient in one flat `to` array and
 // distinguishes cc/bcc via this `type` field rather than separate arrays.
-function tagType(type) {
-  return function (addr) {
-    var out = { email: addr.email, type: type };
-    if (addr.name) {
-      out.name = addr.name;
-    }
-    return out;
-  };
-}
+const tagType = (type) => (addr) => {
+  const out = { email: addr.email, type: type };
+  if (addr.name) {
+    out.name = addr.name;
+  }
+  return out;
+};
 
 // Map the canonical email to Mandrill's message format. Note cc/bcc are merged
 // into the single `to` array (tagged via type) and the sender is split into the
 // separate from_email/from_name fields Mandrill expects.
-function toMandrill(n) {
-  var to = []
+const toMandrill = (n) => {
+  const to = []
     .concat(n.to.map(tagType('to')))
     .concat(n.cc.map(tagType('cc')))
     .concat(n.bcc.map(tagType('bcc')));
-  var msg = { to: to, subject: n.subject };
+  const msg = { to: to, subject: n.subject };
   if (n.from) {
     msg.from_email = n.from.email;
     if (n.from.name) {
@@ -162,12 +160,12 @@ function toMandrill(n) {
     }
   }
   return setBody(msg, n);
-}
+};
 
 // Map the canonical email to nodemailer's sendMail options (used for SMTP).
 // Optional fields are only set when present so we don't send empty arrays.
-function toNodemailer(n) {
-  var msg = { from: asNodemailer(n.from), to: n.to.map(asNodemailer), subject: n.subject };
+const toNodemailer = (n) => {
+  const msg = { from: asNodemailer(n.from), to: n.to.map(asNodemailer), subject: n.subject };
   if (n.cc.length) {
     msg.cc = n.cc.map(asNodemailer);
   }
@@ -178,12 +176,12 @@ function toNodemailer(n) {
     msg.replyTo = asNodemailer(n.replyTo);
   }
   return setBody(msg, n);
-}
+};
 
 // Map the canonical email to Resend's send() params. Resend takes string
 // addresses and its SDK maps our `replyTo` to the wire's `reply_to`.
-function toResend(n) {
-  var msg = { from: asString(n.from), to: n.to.map(asString), subject: n.subject };
+const toResend = (n) => {
+  const msg = { from: asString(n.from), to: n.to.map(asString), subject: n.subject };
   if (n.cc.length) {
     msg.cc = n.cc.map(asString);
   }
@@ -194,12 +192,12 @@ function toResend(n) {
     msg.replyTo = asString(n.replyTo);
   }
   return setBody(msg, n);
-}
+};
 
 // Map the canonical email to SendGrid's MailData. SendGrid uses EmailData
 // ({ email, name }) objects and accepts `replyTo` directly.
-function toSendgrid(n) {
-  var msg = { from: asSendgrid(n.from), to: n.to.map(asSendgrid), subject: n.subject };
+const toSendgrid = (n) => {
+  const msg = { from: asSendgrid(n.from), to: n.to.map(asSendgrid), subject: n.subject };
   if (n.cc.length) {
     msg.cc = n.cc.map(asSendgrid);
   }
@@ -210,23 +208,17 @@ function toSendgrid(n) {
     msg.replyTo = asSendgrid(n.replyTo);
   }
   return setBody(msg, n);
-}
+};
 
 // Public API: each to<Provider> entry normalizes the caller's email first, then
 // maps it to that provider's native shape. normalizeEmail is also exported for
 // callers/tests that want the intermediate canonical form.
-module.exports = {
+const formatEmail = {
   normalizeEmail: normalizeEmail,
-  toMandrill: function (email) {
-    return toMandrill(normalizeEmail(email));
-  },
-  toNodemailer: function (email) {
-    return toNodemailer(normalizeEmail(email));
-  },
-  toResend: function (email) {
-    return toResend(normalizeEmail(email));
-  },
-  toSendgrid: function (email) {
-    return toSendgrid(normalizeEmail(email));
-  }
+  toMandrill: (email) => toMandrill(normalizeEmail(email)),
+  toNodemailer: (email) => toNodemailer(normalizeEmail(email)),
+  toResend: (email) => toResend(normalizeEmail(email)),
+  toSendgrid: (email) => toSendgrid(normalizeEmail(email))
 };
+
+module.exports = formatEmail;

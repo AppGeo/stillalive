@@ -15,7 +15,7 @@ var send = require('./send');
 module.exports = function (key, emailConfig, inport) {
   // Active timers keyed by id; each is replaced/cleared on the next check-in.
   var timeouts = {};
-  var emailSender = send(emailConfig);
+  const emailSender = send(emailConfig);
   var testKey = createEquals(key);
   var app = express();
   var port = inport || process.env.PORT || 3000;
@@ -123,10 +123,10 @@ function toMilliseconds(i) {
     return NaN;
   }
   // Roll each larger unit down into the next, accumulating to milliseconds.
-  var weeks = i.weeks || 0;
-  var days = (i.days || 0) + weeks * 7;
-  var hours = (i.hours || 0) + days * 24;
-  var minutes = (i.minutes || 0) + hours * 60;
-  var seconds = (i.seconds || 0) + minutes * 60;
+  const weeks = i.weeks || 0;
+  const days = (i.days || 0) + weeks * 7;
+  const hours = (i.hours || 0) + days * 24;
+  const minutes = (i.minutes || 0) + hours * 60;
+  const seconds = (i.seconds || 0) + minutes * 60;
   return (i.milliseconds || 0) + seconds * 1000;
 }
