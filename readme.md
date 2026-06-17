@@ -3,87 +3,146 @@ still alive
 
 Confirm a process is still alive, and if it isn't, send an email about it.
 
-This now works with any SMTP provider, Mandrill, Resend, or SendGrid.
+This works with any SMTP provider, Mandrill, Resend, or SendGrid.
 
-If using SMTP, specify your SMTP provider in your JSON such as:
+## Installation
 
-```js
-{
-    "key": "my-secret-key",
-    "smtp":{
-      "service":"smtp-mail.outlook.com",
-      "auth": {
-        "user":"user@example.com",
-        "pass":"insert_password_here"
-      }
-    }
-  }
-  
-```
+stillalive can be used two ways (see [Usage](#usage)): embedded in your own
+Node app as a library, or run directly as a CLI. Install accordingly:
 
-If using mandrill:
+| How you'll use it | Install |
+| --- | --- |
+| As a library (require it in your code) | `npm install stillalive` |
+| As a CLI (run the `stillalive` command) | `npm install -g stillalive` |
 
-```js
-{
-    "key": "my-secret-key",
-    "smtp":{
-      "service":"mandrill",
-      "accessKeyId": "md-EgWVMWEjZF2KdSlocGs2Aw"
-    }
-  }
-  
-```
+Resend and SendGrid additionally need their official SDK, which ships as an
+**optional peer dependency** so it only gets installed if you actually use it
+(SMTP and Mandrill need nothing extra):
 
-## Resend and SendGrid
-
-Resend and SendGrid are supported through their official SDKs, which are
-declared as **optional peer dependencies**. They are not installed by default,
-so they add no bloat unless you actually use them. Install only the one you
-want:
-
-```
-npm install resend
-# or
-npm install @sendgrid/mail
-```
+| Provider | Extra install |
+| --- | --- |
+| SMTP / Mandrill | none |
+| Resend | `npm install resend` |
+| SendGrid | `npm install @sendgrid/mail` |
 
 The SDK is lazily `require()`d only when its service is selected, so the package
-works fine with neither installed. If you select a service without installing
-its SDK, you'll get a clear error telling you which package to install.
+works fine with neither installed. If you configure `resend` or `sendgrid`
+without installing its SDK, stillalive fails fast at startup with a clear error
+telling you the exact `npm install` command to run.
 
-If using Resend:
+## Usage
+
+Both strategies take the same two pieces of configuration: a `key` (a shared
+secret callers must present) and a provider config object (see
+[Configuring an email provider](#configuring-an-email-provider)).
+
+### As a library
+
+`require('stillalive')` returns a factory: `stillalive(key, provider, port)`.
+It starts an Express server and returns the `app`, so you can add your own
+routes:
 
 ```js
-{
-    "key": "my-secret-key",
-    "smtp":{
-      "service":"resend",
-      "apiKey": "re_xxxxxxxxxxxx"
-    }
-  }
+var port = process.env.PORT || 8080;
+var config = require('./config.json');
+var stillalive = require('stillalive');
+var pack = require('./package.json');
+
+var app = stillalive(config.key, config.provider, port);
+
+app.get('/version', function (req, res) {
+  res.send(pack.version);
+});
 ```
 
-If using SendGrid:
+`port` is optional and defaults to `process.env.PORT`, then `3000`.
+
+### As a CLI
+
+Point the `stillalive` command at a JSON config file:
+
+```
+stillalive ./path/to/config.json [port]
+```
+
+`port` is optional and defaults to `process.env.PORT`, then `3000`. The config
+file holds the `key` and provider config (the provider object goes under
+`provider`; the legacy keys `smtp` and `api` are still accepted):
+
+```json
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "smtp-mail.outlook.com",
+    "auth": {
+      "user": "user@example.com",
+      "pass": "insert_password_here"
+    }
+  }
+}
+```
+
+## Configuring an email provider
+
+The provider config object selects the email service via its `service` field.
+The examples below show it under the `provider` key of a CLI config file; when
+used as a library, pass the inner object as the second argument to
+`stillalive(key, provider, port)`.
+
+If using SMTP, name your SMTP host as the `service`:
 
 ```js
 {
-    "key": "my-secret-key",
-    "smtp":{
-      "service":"sendgrid",
-      "apiKey": "SG.xxxxxxxxxxxx"
+  "key": "my-secret-key",
+  "provider": {
+    "service": "smtp-mail.outlook.com",
+    "auth": {
+      "user": "user@example.com",
+      "pass": "insert_password_here"
     }
   }
+}
+```
+
+If using Mandrill:
+
+```js
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "mandrill",
+    "accessKeyId": "md-EgWVMWEjZF2KdSlocGs2Aw"
+  }
+}
+```
+
+If using Resend (requires `npm install resend`):
+
+```js
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "resend",
+    "apiKey": "re_xxxxxxxxxxxx"
+  }
+}
+```
+
+If using SendGrid (requires `npm install @sendgrid/mail`):
+
+```js
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "sendgrid",
+    "apiKey": "SG.xxxxxxxxxxxx"
+  }
+}
 ```
 
 Whatever provider you configure, requests use the same canonical `email` object
 (see [email object](#email-object) below) -- stillalive maps it to each
 provider's native format for you.
-
-`npm install -g stillalive`
-
-`stillalive ./path/to/config port`
-
-port is optional, defaults to process.env.PORT followed by 3000.
 
 # usage
 

@@ -5,9 +5,17 @@ var morgan = require('morgan');
 
 var send = require('./send');
 
+// Exported factory: starts an Express "dead man's switch" server.
+//   key         - shared secret callers must present to arm/clear timeouts
+//   emailConfig - provider config passed to ./send (selects SMTP/Mandrill/etc.)
+//   inport      - optional port; falls back to PORT env var, then 3000
+//
+// Clients periodically PUT /still/alive/:id to (re)arm a per-id timer. If a
+// client stops checking in, the timer fires and an alert email is sent.
 module.exports = function (key, emailConfig, inport) {
+  // Active timers keyed by id; each is replaced/cleared on the next check-in.
   var timeouts = {};
-  const emailSender = send(emailConfig);
+  var emailSender = send(emailConfig);
   var testKey = createEquals(key);
   var app = express();
   var port = inport || process.env.PORT || 3000;
@@ -28,6 +36,8 @@ module.exports = function (key, emailConfig, inport) {
   app.get('/', function (req, res) {
     res.send('ok');
   });
+  // Arm (or re-arm) the watchdog timer for :id. Each call resets the countdown;
+  // the email only fires if no further check-in arrives before it elapses.
   app.put('/still/alive/:id', function (req, res) {
     if (!testKey(req.body.key)) {
       return res.status(400).json({
@@ -35,11 +45,14 @@ module.exports = function (key, emailConfig, inport) {
       });
     }
 
+    // Cancel any existing timer for this id so we restart the countdown clean.
     if (req.params.id in timeouts) {
       clearTimeout(timeouts[req.params.id]);
       delete timeouts[req.params.id];
     }
 
+    // Schedule the alert. If this id checks in again first, the timer above is
+    // cleared and this callback never runs.
     timeouts[req.params.id] = setTimeout(function () {
       sendEmail(req.body.email);
       delete timeouts[req.params.id];
@@ -50,6 +63,7 @@ module.exports = function (key, emailConfig, inport) {
     });
   });
 
+  // Manually cancel a pending timer for :id (e.g. on a clean shutdown).
   app.put('/clear/:id', function (req, res) {
     if (!testKey(req.body.key)) {
       return res.status(400).json({
@@ -73,17 +87,23 @@ module.exports = function (key, emailConfig, inport) {
 
   return app;
 };
+
+// Build a comparator that checks a supplied key against the configured one.
+// The comparison is constant-time (XORs every byte and ORs the differences)
+// rather than short-circuiting, to avoid leaking the key via timing analysis.
 function createEquals(origKey) {
   var orig = Buffer.from(origKey);
   var len = orig.length;
   return testKey;
   function testKey(compare) {
     var comp = Buffer.from(compare);
+    // A length mismatch can't match; bail early (length isn't secret).
     if (comp.length !== len) {
       return false;
     }
     var out = 0;
     var i = -1;
+    // Accumulate any differing bits across all bytes; out stays 0 iff equal.
     while (++i < len) {
       out |= orig[i] ^ comp[i];
     }
@@ -93,15 +113,16 @@ function createEquals(origKey) {
 
 // Convert an interval into milliseconds. Accepts a number (passed through as
 // milliseconds) or an object with any of weeks/days/hours/minutes/seconds/
-// milliseconds. Replaces the former `interval` dependency, which is unmaintained
-// and relied on the now-removed util.isDate.
+// milliseconds, which are summed.
 function toMilliseconds(i) {
   if (typeof i === 'number') {
     return i;
   }
+  // Covers null/undefined/empty -- mirrors the old dependency's NaN return.
   if (!i) {
     return NaN;
   }
+  // Roll each larger unit down into the next, accumulating to milliseconds.
   var weeks = i.weeks || 0;
   var days = (i.days || 0) + weeks * 7;
   var hours = (i.hours || 0) + days * 24;
