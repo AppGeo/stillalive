@@ -42,6 +42,12 @@ export default async function createServer(key, emailConfig, listenPort) {
       return res.status(400).json({ error: 'bad request' });
     }
 
+    // Reject an unusable interval up front
+    const ms = toMilliseconds(req.body.interval);
+    if (!Number.isFinite(ms) || ms < 0) {
+      return res.status(400).json({ error: 'invalid interval' });
+    }
+
     // Cancel any existing timer for this id so we restart the countdown clean.
     if (req.params.id in timeouts) {
       clearTimeout(timeouts[req.params.id]);
@@ -53,7 +59,7 @@ export default async function createServer(key, emailConfig, listenPort) {
     timeouts[req.params.id] = setTimeout(() => {
       sendEmail(req.body.email);
       delete timeouts[req.params.id];
-    }, toMilliseconds(req.body.interval));
+    }, ms);
 
     res.json({ 'timeout set': req.body.interval });
   });
@@ -107,9 +113,10 @@ function toMilliseconds(i) {
   if (typeof i === 'number') {
     return i;
   }
-  // Covers null/undefined/empty -- mirrors the old dependency's NaN return.
-  if (!i) {
-    return NaN;
+  // Return null for anything that isn't a number or a units object.
+  // SIgnals the route to reject with a clear error.
+  if (!i || typeof i !== 'object') {
+    return null;
   }
   // Roll each larger unit down into the next, accumulating to milliseconds.
   const weeks = i.weeks || 0;
