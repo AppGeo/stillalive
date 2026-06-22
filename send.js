@@ -72,7 +72,8 @@ export default async function createSender(config) {
 
   if (config.service === 'sendgrid') {
     // Lazily load the SendGrid SDK only when this service is selected.
-    const sgMail = await lazyImport('@sendgrid/mail', 'sendgrid');
+    // It's a CommonJS package, it lives on the default export
+    const sgMail = (await lazyImport('@sendgrid/mail', 'sendgrid')).default;
     sgMail.setApiKey(config.apiKey || config.accessKeyId);
     return (opts, cb) => {
       // SendGrid rejects its promise on failure, so the second .then handler
