@@ -114,7 +114,7 @@ function toMilliseconds(i) {
     return i;
   }
   // Return null for anything that isn't a number or a units object.
-  // SIgnals the route to reject with a clear error.
+  // Signals the route to reject with a clear error.
   if (!i || typeof i !== 'object') {
     return null;
   }
