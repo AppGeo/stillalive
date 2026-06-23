@@ -2,6 +2,7 @@ import express from 'express';
 import morgan from 'morgan';
 
 import createSender from './send.js';
+import formatEmail from './normalize.js';
 
 // Exported factory: starts an Express "dead man's switch" server.
 //   key         - shared secret callers must present to arm/clear timeouts
@@ -11,8 +12,11 @@ import createSender from './send.js';
 // Clients periodically PUT /still/alive/:id to (re)arm a per-id timer. If a
 // client stops checking in, the timer fires and an alert email is sent.
 export default async function createServer(key, emailConfig, listenPort) {
+  if (typeof key !== 'string' || key.length === 0) {
+    throw new TypeError('`key` must be a non-empty string.');
+  }
   // Active timers keyed by id; each is replaced/cleared on the next check-in.
-  const timeouts = {};
+  const timeouts = new Map();
   const emailSender = await createSender(emailConfig);
   const testKey = createEquals(key);
   const app = express();
@@ -38,41 +42,55 @@ export default async function createServer(key, emailConfig, listenPort) {
   // Arm (or re-arm) the watchdog timer for :id. Each call resets the countdown;
   // the email only fires if no further check-in arrives before it elapses.
   app.put('/still/alive/:id', (req, res) => {
-    if (!testKey(req.body.key)) {
+    const body = req.body ?? {};
+    if (!testKey(body.key)) {
       return res.status(400).json({ error: 'bad request' });
     }
 
+    // Validate the alert payload now so the caller gets immediate feedback
+    // instead of the email failing silently when the timer eventually fires.
+    const emailErrors = formatEmail.validate(body.email);
+    if (emailErrors.length) {
+      return res.status(400).json({ error: 'invalid email', details: emailErrors });
+    }
+
     // Reject an unusable interval up front
-    const ms = toMilliseconds(req.body.interval);
+    const ms = toMilliseconds(body.interval);
     if (!Number.isFinite(ms) || ms < 0) {
       return res.status(400).json({ error: 'invalid interval' });
     }
 
+    const { id } = req.params;
     // Cancel any existing timer for this id so we restart the countdown clean.
-    if (req.params.id in timeouts) {
-      clearTimeout(timeouts[req.params.id]);
-      delete timeouts[req.params.id];
+    if (timeouts.has(id)) {
+      clearTimeout(timeouts.get(id));
+      timeouts.delete(id);
     }
 
     // Schedule the alert. If this id checks in again first, the timer above is
     // cleared and this callback never runs.
-    timeouts[req.params.id] = setTimeout(() => {
-      sendEmail(req.body.email);
-      delete timeouts[req.params.id];
-    }, ms);
+    timeouts.set(
+      id,
+      setTimeout(() => {
+        sendEmail(body.email);
+        timeouts.delete(id);
+      }, ms)
+    );
 
-    res.json({ 'timeout set': req.body.interval });
+    res.json({ 'timeout set': body.interval });
   });
 
   // Manually cancel a pending timer for :id (e.g. on a clean shutdown).
   app.put('/clear/:id', (req, res) => {
-    if (!testKey(req.body.key)) {
+    const body = req.body ?? {};
+    if (!testKey(body.key)) {
       return res.status(400).json({ error: 'bad request' });
     }
 
-    if (req.params.id in timeouts) {
-      clearTimeout(timeouts[req.params.id]);
-      delete timeouts[req.params.id];
+    const { id } = req.params;
+    if (timeouts.has(id)) {
+      clearTimeout(timeouts.get(id));
+      timeouts.delete(id);
       return res.json({ cleared: true });
     }
     res.status(400).json({ error: 'no such timeout' });
@@ -92,6 +110,11 @@ function createEquals(origKey) {
   const len = orig.length;
 
   return (compare) => {
+    // A missing or non-string key can't match; treat it as a failed auth
+    // (handled as a 400 by the route) rather than letting Buffer.from throw.
+    if (typeof compare !== 'string') {
+      return false;
+    }
     const comp = Buffer.from(compare);
     // A length mismatch can't match; bail early (length isn't secret).
     if (comp.length !== len) {

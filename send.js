@@ -17,7 +17,10 @@ async function lazyImport(moduleName, service) {
   try {
     return await import(moduleName);
   } catch (err) {
-    if (err?.code === 'ERR_MODULE_NOT_FOUND') {
+    // Only treat this as the optional dep being absent when the error actually
+    // names the requested module -- a missing *transitive* dependency inside an
+    // installed SDK also throws ERR_MODULE_NOT_FOUND and must not be misblamed.
+    if (err?.code === 'ERR_MODULE_NOT_FOUND' && err.message.includes(`'${moduleName}'`)) {
       throw new Error(
         `The "${service}" service requires the optional dependency "${moduleName}", which is not installed. Install it with: npm install ${moduleName} (required only for the "${service}" service).`
       );
@@ -26,16 +29,29 @@ async function lazyImport(moduleName, service) {
   }
 }
 
+// Every API-based provider (Mandrill/Resend/SendGrid) authenticates with a
+// string `apiKey`. Fail fast with a clear message when it is missing.
+function requireApiKey(config, service) {
+  if (typeof config.apiKey !== 'string' || config.apiKey.length === 0) {
+    throw new TypeError(`The "${service}" service requires a non-empty string \`apiKey\`.`);
+  }
+}
+
 // config.service selects the provider. Returns a promise that resolves to
 // send(opts, cb) where opts is a canonical email object (see ./normalize)
 // and cb is (err, result).
 export default async function createSender(config) {
+  if (!config || typeof config !== 'object' || typeof config.service !== 'string') {
+    throw new TypeError(
+      'Email provider config must be an object with a string `service` field. See the readme for each provider\'s config shape.'
+    );
+  }
+
   if (config.service === 'mandrill') {
+    requireApiKey(config, 'mandrill');
     // Mandrill has no SDK dependency; we POST directly to its REST API using
     // the built-in fetch (available globally in Node ≥18, stable by Node 24).
-    // `apiKey` is the canonical field; `accessKeyId` is a legacy alias kept for
-    // backward compatibility with older configs.
-    const apiKey = config.apiKey || config.accessKeyId;
+    const apiKey = config.apiKey;
     return (opts, cb) => {
       const body = JSON.stringify({
         key: apiKey,
@@ -55,9 +71,10 @@ export default async function createSender(config) {
   }
 
   if (config.service === 'resend') {
+    requireApiKey(config, 'resend');
     // Lazily load the Resend SDK only when this service is selected.
     const Resend = (await lazyImport('resend', 'resend')).Resend;
-    const resend = new Resend(config.apiKey || config.accessKeyId);
+    const resend = new Resend(config.apiKey);
     return (opts, cb) => {
       // Resend's SDK resolves (instead of rejecting) on API errors, returning
       // { data, error } -- so we surface result.error through the callback.
@@ -71,10 +88,11 @@ export default async function createSender(config) {
   }
 
   if (config.service === 'sendgrid') {
+    requireApiKey(config, 'sendgrid');
     // Lazily load the SendGrid SDK only when this service is selected.
     // It's a CommonJS package, it lives on the default export
     const sgMail = (await lazyImport('@sendgrid/mail', 'sendgrid')).default;
-    sgMail.setApiKey(config.apiKey || config.accessKeyId);
+    sgMail.setApiKey(config.apiKey);
     return (opts, cb) => {
       // SendGrid rejects its promise on failure, so the second .then handler
       // (cb) receives any error directly.
@@ -85,6 +103,11 @@ export default async function createSender(config) {
   }
 
   // Default: treat config.service as an SMTP host and send via nodemailer.
+  if (!config.auth || typeof config.auth.user !== 'string' || typeof config.auth.pass !== 'string') {
+    throw new TypeError(
+      `The SMTP service ("${config.service}") requires \`auth.user\` and \`auth.pass\` strings.`
+    );
+  }
   const smtpConfig = {
     host: config.service,
     port: config.port || 587,

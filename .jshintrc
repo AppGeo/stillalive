@@ -1,6 +1,6 @@
 {
   "node" : true,
-  "esversion": 11,
+  "esversion": 2022,
   "module": true,
   "curly": true,
   "eqeqeq": true,

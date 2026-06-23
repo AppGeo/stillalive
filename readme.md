@@ -34,9 +34,8 @@ Both strategies take the same two pieces of configuration: a `key` (a shared sec
 
 ```js
 import stillalive from 'stillalive';
-import { readFile } from 'node:fs/promises';
+import config from './config.emailProvider.json' with { type: 'json' };
 
-const config = JSON.parse(await readFile('./config.emailProvider.json', 'utf8'));
 const port = process.env.PORT || 8080;
 
 const app = await stillalive(config.key, config.provider, port);
@@ -56,7 +55,7 @@ Point the `stillalive` command at a JSON config file:
 stillalive ./path/to/config.json [port]
 ```
 
-`port` is optional and defaults to `process.env.PORT`, then `3000`. The config file holds the `key` and provider config (the provider object goes under `provider`; the legacy keys `smtp` and `api` are still accepted):
+`port` is optional and defaults to `process.env.PORT`, then `3000`. The config file holds the `key` and provider config (the provider object goes under `provider`):
 
 ```json
 {
@@ -101,8 +100,6 @@ If using Mandrill (see [examples/config.mandrill.json](examples/config.mandrill.
   }
 }
 ```
-
-(For Mandrill, `accessKeyId` is also accepted as a legacy alias for `apiKey`.)
 
 If using Resend (requires `npm install resend`; see [examples/config.resend.json](examples/config.resend.json)):
 
@@ -178,6 +175,45 @@ Provide `text`, `html`, or both. A fuller example:
 }
 ```
 
-Legacy Mandrill-style payloads (`from_email`/`from_name` plus a `to` array of `{ "type", "email", "name" }`) are still accepted, so existing integrations keep working without changes.
-
 The `interval` field accepts a number of milliseconds, or an object with any of `weeks`, `days`, `hours`, `minutes`, `seconds`, and `milliseconds` (which are summed). For example, `{ "minutes": 5 }` or `{ "hours": 1, "minutes": 30 }`.
+
+## validation and error responses
+
+Arming a timer (`PUT /still/alive/:id`) validates the request and responds with `400` and a JSON body when something is wrong:
+
+| Condition | Response |
+| --- | --- |
+| Missing or incorrect `key` | `{ "error": "bad request" }` |
+| Invalid `email` payload | `{ "error": "invalid email", "details": [ ... ] }` |
+| Missing or invalid `interval` | `{ "error": "invalid interval" }` |
+
+The `details` array lists every problem found in the `email` object, for example:
+
+```json
+{
+  "error": "invalid email",
+  "details": [
+    "`from` must be a valid email address",
+    "`to` must include at least one recipient",
+    "`subject` must be a non-empty string",
+    "either `text` or `html` body is required"
+  ]
+}
+```
+
+A valid payload needs a syntactically valid `from`, at least one valid `to`, a non-empty `subject`, and a `text` or `html` body. Provider config is validated when the server starts: a missing/invalid `key`, an unknown provider shape, a missing API `apiKey`, or missing SMTP `auth.user`/`auth.pass` throws a clear `TypeError` at startup.
+
+## Migrating to v3
+
+v3 removes the legacy aliases that earlier versions silently accepted, in favor of a single canonical shape. Update any of the following:
+
+| Removed (pre-v3) | Use instead |
+| --- | --- |
+| `from_email` / `from_name` on the email object | `from` (a string or `{ email, name }`) |
+| `reply_to` (snake_case) | `replyTo` |
+| `address` key on an address object | `email` |
+| Mandrill-style `to` entries with a `type` field | a string or `{ email, name }` |
+| `accessKeyId` in provider config | `apiKey` |
+| `smtp` / `api` keys in a CLI config file | `provider` |
+
+In addition, requests and config are now validated up front (see [validation and error responses](#validation-and-error-responses)). Payloads or configs that previously "worked" but were incomplete will now be rejected with an explicit error instead of failing silently.

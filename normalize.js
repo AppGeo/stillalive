@@ -15,9 +15,6 @@
 //     text:     "plain text body",     // text and/or html
 //     html:     "<p>html body</p>"
 //   }
-//
-// Legacy Mandrill-style fields (from_email/from_name and a to array of
-// { email, name, type }) are also accepted so existing payloads keep working.
 
 // Parse a single address input into a normalized { email, name } object (or
 // null when there is nothing usable). This is the one place that understands
@@ -40,10 +37,9 @@ const parseAddress = (input) => {
     return { email: input.trim() };
   }
   if (typeof input === 'object') {
-    // Object form. Accept `email` (our canonical key) or `address` (the key
-    // nodemailer uses) so either style of object can be passed in. Without an
-    // address there is nothing to send to, so treat it as empty.
-    const email = input.email || input.address;
+    // Object form: { email, name }. Without an email there is nothing to send
+    // to, so treat it as empty.
+    const email = input.email;
     if (!email) {
       return null;
     }
@@ -70,21 +66,12 @@ const parseAddressList = (input) => {
 // a single normalized object, so the mappers never have to re-handle shorthand.
 const normalizeEmail = (email) => {
   email = email || {};
-  // Resolve the sender from either the canonical `from` or the legacy Mandrill
-  // `from_email`/`from_name` pair, so older payloads keep working unchanged.
-  let from;
-  if (email.from !== undefined) {
-    from = email.from;
-  } else if (email.from_email) {
-    from = { email: email.from_email, name: email.from_name };
-  }
   return {
-    from: parseAddress(from),
+    from: parseAddress(email.from),
     to: parseAddressList(email.to),
     cc: parseAddressList(email.cc),
     bcc: parseAddressList(email.bcc),
-    // Accept both the canonical `replyTo` and snake_case `reply_to`.
-    replyTo: parseAddress(email.replyTo || email.reply_to),
+    replyTo: parseAddress(email.replyTo),
     subject: email.subject,
     text: email.text,
     html: email.html
@@ -208,11 +195,55 @@ const toSendgrid = (n) => {
   return setBody(msg, n);
 };
 
+// Pragmatic single-line address check: a non-empty local part, an "@", and a
+// dotted domain, with no whitespace. Deliberately permissive -- it catches the
+// common mistakes (missing "@", trailing spaces) without trying to reimplement
+// the full RFC 5322 grammar.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const isValidAddress = (addr) =>
+  Boolean(addr) && typeof addr.email === 'string' && EMAIL_RE.test(addr.email);
+
+// Validate a caller-supplied email payload, returning an array of human-readable
+// error strings (empty when valid). Operates on the normalized shape so the same
+// rules apply no matter which shorthand the caller used. Required: a valid
+// `from`, at least one valid `to`, a non-empty `subject`, and `text` or `html`.
+const validate = (email) => {
+  const n = normalizeEmail(email);
+  const errors = [];
+
+  if (!isValidAddress(n.from)) {
+    errors.push('`from` must be a valid email address');
+  }
+  if (n.to.length === 0) {
+    errors.push('`to` must include at least one recipient');
+  } else if (!n.to.every(isValidAddress)) {
+    errors.push('every `to` address must be a valid email address');
+  }
+  for (const field of ['cc', 'bcc']) {
+    if (n[field].length && !n[field].every(isValidAddress)) {
+      errors.push(`every \`${field}\` address must be a valid email address`);
+    }
+  }
+  if (n.replyTo && !isValidAddress(n.replyTo)) {
+    errors.push('`replyTo` must be a valid email address');
+  }
+  if (typeof n.subject !== 'string' || n.subject.length === 0) {
+    errors.push('`subject` must be a non-empty string');
+  }
+  if (!n.text && !n.html) {
+    errors.push('either `text` or `html` body is required');
+  }
+
+  return errors;
+};
+
 // Public API: each to<Provider> entry normalizes the caller's email first, then
 // maps it to that provider's native shape. normalizeEmail is also exported for
 // callers/tests that want the intermediate canonical form.
 const formatEmail = {
   normalizeEmail: normalizeEmail,
+  validate: validate,
   toMandrill: (email) => toMandrill(normalizeEmail(email)),
   toNodemailer: (email) => toNodemailer(normalizeEmail(email)),
   toResend: (email) => toResend(normalizeEmail(email)),
