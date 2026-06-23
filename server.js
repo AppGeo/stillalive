@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
+
 import express from 'express';
 import morgan from 'morgan';
 
@@ -18,7 +20,7 @@ export default async function createServer(key, emailConfig, listenPort) {
   // Active timers keyed by id; each is replaced/cleared on the next check-in.
   const timeouts = new Map();
   const emailSender = await createSender(emailConfig);
-  const testKey = createEquals(key);
+  const verifyKey = createKeyVerifier(key);
   const app = express();
   const port = listenPort || process.env.PORT || 3000;
 
@@ -43,7 +45,7 @@ export default async function createServer(key, emailConfig, listenPort) {
   // the email only fires if no further check-in arrives before it elapses.
   app.put('/still/alive/:id', (req, res) => {
     const body = req.body ?? {};
-    if (!testKey(body.key)) {
+    if (!verifyKey(body.key)) {
       return res.status(400).json({ error: 'bad request' });
     }
 
@@ -83,7 +85,7 @@ export default async function createServer(key, emailConfig, listenPort) {
   // Manually cancel a pending timer for :id (e.g. on a clean shutdown).
   app.put('/clear/:id', (req, res) => {
     const body = req.body ?? {};
-    if (!testKey(body.key)) {
+    if (!verifyKey(body.key)) {
       return res.status(400).json({ error: 'bad request' });
     }
 
@@ -103,29 +105,21 @@ export default async function createServer(key, emailConfig, listenPort) {
 }
 
 // Build a comparator that checks a supplied key against the configured one.
-// The comparison is constant-time (XORs every byte and ORs the differences)
-// rather than short-circuiting, to avoid leaking the key via timing analysis.
-function createEquals(origKey) {
-  const orig = Buffer.from(origKey);
-  const len = orig.length;
+// Both keys are hashed to a fixed-length digest and compared with
+// crypto.timingSafeEqual, so the check is constant-time (no key leak via timing
+// analysis) and -- because the digests are always the same length -- it neither
+// throws nor reveals the key's length.
+function createKeyVerifier(origKey) {
+  const origHash = createHash('sha256').update(origKey).digest();
 
   return (compare) => {
     // A missing or non-string key can't match; treat it as a failed auth
-    // (handled as a 400 by the route) rather than letting Buffer.from throw.
+    // (handled as a 400 by the route) rather than letting the hash throw.
     if (typeof compare !== 'string') {
       return false;
     }
-    const comp = Buffer.from(compare);
-    // A length mismatch can't match; bail early (length isn't secret).
-    if (comp.length !== len) {
-      return false;
-    }
-    let out = 0;
-    // Accumulate any differing bits across all bytes; out stays 0 iff equal.
-    for (let i = 0; i < len; i++) {
-      out |= orig[i] ^ comp[i];
-    }
-    return out === 0;
+    const compHash = createHash('sha256').update(compare).digest();
+    return timingSafeEqual(origHash, compHash);
   };
 }
 
