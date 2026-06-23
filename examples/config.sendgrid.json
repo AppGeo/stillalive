@@ -1,0 +1,7 @@
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "sendgrid",
+    "apiKey": "SG.xxxxxxxxxxxx"
+  }
+}

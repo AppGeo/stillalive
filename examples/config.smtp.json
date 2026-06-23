@@ -1,0 +1,10 @@
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "smtp-mail.outlook.com",
+    "auth": {
+      "user": "user@example.com",
+      "pass": "insert_password_here"
+    }
+  }
+}

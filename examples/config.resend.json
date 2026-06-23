@@ -1,0 +1,7 @@
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "resend",
+    "apiKey": "re_xxxxxxxxxxxx"
+  }
+}

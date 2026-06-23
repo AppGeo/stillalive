@@ -1,5 +1,7 @@
 {
   "node" : true,
+  "esversion": 2022,
+  "module": true,
   "curly": true,
   "eqeqeq": true,
   "immed": true,
@@ -7,7 +9,7 @@
   "noarg": true,
   "sub": true,
   "undef": "nofunc",
-  "strict": true,
+  "strict": "global",
   "white": true,
   "indent": 2,
   "trailing": true,

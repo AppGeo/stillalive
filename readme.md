@@ -3,61 +3,142 @@ still alive
 
 Confirm a process is still alive, and if it isn't, send an email about it.
 
-This now works with any SMTP provider or Mandrill. 
+This works with any SMTP provider, Mandrill, Resend, or SendGrid.
 
-If using SMTP, specify your SMTP provider in your JSON such as:
+## Installation
+
+stillalive can be used two ways (see [Usage](#usage)): embedded in your own Node app as a library, or run directly as a CLI. Install accordingly:
+
+| How you'll use it | Install |
+| --- | --- |
+| As a library (import it in your code) | `npm install stillalive` |
+| As a CLI (run the `stillalive` command) | `npm install -g stillalive` |
+
+Resend and SendGrid additionally need their official SDK, which ships as an **optional peer dependency** so it only gets installed if you actually use it (SMTP and Mandrill need nothing extra):
+
+| Provider | Extra install |
+| --- | --- |
+| SMTP / Mandrill | none |
+| Resend | `npm install resend` |
+| SendGrid | `npm install @sendgrid/mail` |
+
+The SDK is loaded via a dynamic `import()` only when its service is selected, so the package works fine with neither installed. If you configure `resend` or `sendgrid` without installing its SDK, stillalive fails fast at startup with a clear error telling you the exact `npm install` command to run.
+
+## Usage
+
+Both strategies take the same two pieces of configuration: a `key` (a shared secret callers must present) and a provider config object (see [Configuring an email provider](#configuring-an-email-provider)).
+
+### As a library
+
+`import stillalive from 'stillalive'` returns an async factory: `await stillalive(key, provider, port)`. It starts an Express server and returns the `app`, so you can add your own routes:
+
+```js
+import stillalive from 'stillalive';
+import config from './config.emailProvider.json' with { type: 'json' };
+
+const port = process.env.PORT || 8080;
+
+const app = await stillalive(config.key, config.provider, port);
+
+app.get('/health', (_req, res) => {
+  res.status(200).send('OK');
+});
+```
+
+`port` is optional and defaults to `process.env.PORT`, then `3000`.
+
+### As a CLI
+
+Point the `stillalive` command at a JSON config file:
+
+```
+stillalive ./path/to/config.json [port]
+```
+
+`port` is optional and defaults to `process.env.PORT`, then `3000`. The config file holds the `key` and provider config (the provider object goes under `provider`):
+
+```json
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "smtp-mail.outlook.com",
+    "auth": {
+      "user": "user@example.com",
+      "pass": "insert_password_here"
+    }
+  }
+}
+```
+
+## Configuring an email provider
+
+The provider config object selects the email service via its `service` field. The examples below show it under the `provider` key of a CLI config file; when used as a library, pass the inner object as the second argument to `stillalive(key, provider, port)`. Ready-to-copy config files for each provider live in the [`examples/`](examples) folder.
+
+If using SMTP, name your SMTP host as the `service` (see [examples/config.smtp.json](examples/config.smtp.json)):
 
 ```js
 {
-    "key": "my-secret-key",
-    "smtp":{
-      "service":"smtp-mail.outlook.com",
-      "auth": {
-        "user":"user@example.com",
-        "pass":"insert_password_here"
-      }
+  "key": "my-secret-key",
+  "provider": {
+    "service": "smtp-mail.outlook.com",
+    "auth": {
+      "user": "user@example.com",
+      "pass": "insert_password_here"
     }
   }
-  
+}
 ```
 
-If using mandrill:
+If using Mandrill (see [examples/config.mandrill.json](examples/config.mandrill.json)):
 
 ```js
 {
-    "key": "my-secret-key",
-    "smtp":{
-      "service":"mandrill",
-      "accessKeyId": "md-EgWVMWEjZF2KdSlocGs2Aw"
-    }
+  "key": "my-secret-key",
+  "provider": {
+    "service": "mandrill",
+    "apiKey": "md-EgWVMWEjZF2KdSlocGs2Aw"
   }
-  
+}
 ```
 
-`npm install -g stillalive`
+If using Resend (requires `npm install resend`; see [examples/config.resend.json](examples/config.resend.json)):
 
-`stillalive ./path/to/config port`
+```js
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "resend",
+    "apiKey": "re_xxxxxxxxxxxx"
+  }
+}
+```
 
-port is optional, defaults to process.env.PORT followed by 3000.
+If using SendGrid (requires `npm install @sendgrid/mail`; see [examples/config.sendgrid.json](examples/config.sendgrid.json)):
+
+```js
+{
+  "key": "my-secret-key",
+  "provider": {
+    "service": "sendgrid",
+    "apiKey": "SG.xxxxxxxxxxxx"
+  }
+}
+```
+
+Whatever provider you configure, requests use the same canonical `email` object (see [email object](#email-object) below) -- stillalive maps it to each provider's native format for you.
 
 # usage
 
 send a put to `host/still/alive/:id` where id is your app specific timeout's name
 
-the body of your request should be json as follows. Note -- if using an SMTP provider instead of Mandrill, do not use an array for the to email addresses.
+The body of your request should be json as follows. The `email` object uses a single canonical shape that works the same no matter which provider you've configured -- stillalive maps it internally to SMTP, Mandrill, Resend or SendGrid:
 
 ```json
 {
   "key": "server key (set in your config file)",
   "email": {
-    "from_email": "you@domain.tld",
-    "to": [
-      {
-        "type": "to",
-        "email": "name@domain.tld",
-        "name": "Their Name"
-      }
-    ],
+    "from": "you@domain.tld",
+    "to": "name@domain.tld",
     "subject": "subject line",
     "text": "text body of email"
   },
@@ -67,4 +148,72 @@ the body of your request should be json as follows. Note -- if using an SMTP pro
 }
 ```
 
-interval field is passed to [interval](https://github.com/fixedset/interval).
+## email object
+
+Every address field (`from`, `to`, `cc`, `bcc`, `replyTo`) accepts any of:
+
+- a string: `"name@domain.tld"`
+- a string with a display name: `"Their Name <name@domain.tld>"`
+- an object: `{ "email": "name@domain.tld", "name": "Their Name" }`
+- an array of any of the above (for `to`/`cc`/`bcc`)
+
+Provide `text`, `html`, or both. A fuller example:
+
+```json
+{
+  "from": { "email": "you@domain.tld", "name": "You" },
+  "to": [
+    "first@domain.tld",
+    { "email": "second@domain.tld", "name": "Second Person" }
+  ],
+  "cc": "cc@domain.tld",
+  "bcc": "bcc@domain.tld",
+  "replyTo": "reply@domain.tld",
+  "subject": "subject line",
+  "text": "text body of email",
+  "html": "<p>html body of email</p>"
+}
+```
+
+The `interval` field accepts a number of milliseconds, or an object with any of `weeks`, `days`, `hours`, `minutes`, `seconds`, and `milliseconds` (which are summed). For example, `{ "minutes": 5 }` or `{ "hours": 1, "minutes": 30 }`.
+
+## validation and error responses
+
+Arming a timer (`PUT /still/alive/:id`) validates the request and responds with `400` and a JSON body when something is wrong:
+
+| Condition | Response |
+| --- | --- |
+| Missing or incorrect `key` | `{ "error": "bad request" }` |
+| Invalid `email` payload | `{ "error": "invalid email", "details": [ ... ] }` |
+| Missing or invalid `interval` | `{ "error": "invalid interval" }` |
+
+The `details` array lists every problem found in the `email` object, for example:
+
+```json
+{
+  "error": "invalid email",
+  "details": [
+    "`from` must be a valid email address",
+    "`to` must include at least one recipient",
+    "`subject` must be a non-empty string",
+    "either `text` or `html` body is required"
+  ]
+}
+```
+
+A valid payload needs a syntactically valid `from`, at least one valid `to`, a non-empty `subject`, and a `text` or `html` body. Provider config is validated when the server starts: a missing/invalid `key`, an unknown provider shape, a missing API `apiKey`, or missing SMTP `auth.user`/`auth.pass` throws a clear `TypeError` at startup.
+
+## Migrating to v3
+
+v3 removes the legacy aliases that earlier versions silently accepted, in favor of a single canonical shape. Update any of the following:
+
+| Removed (pre-v3) | Use instead |
+| --- | --- |
+| `from_email` / `from_name` on the email object | `from` (a string or `{ email, name }`) |
+| `reply_to` (snake_case) | `replyTo` |
+| `address` key on an address object | `email` |
+| Mandrill-style `to` entries with a `type` field | a string or `{ email, name }` |
+| `accessKeyId` in provider config | `apiKey` |
+| `smtp` / `api` keys in a CLI config file | `provider` |
+
+In addition, requests and config are now validated up front (see [validation and error responses](#validation-and-error-responses)). Payloads or configs that previously "worked" but were incomplete will now be rejected with an explicit error instead of failing silently.

@@ -1,18 +1,22 @@
 #!/usr/bin/env node
-'use strict';
-var path = require('path');
-var mail = require('./server');
-var fs = require('fs');
-var configPath = path.resolve(process.argv[2]);
-var len = process.argv.length;
-fs.readFile(configPath, function (err, resp) {
-  if (err) {
-    throw err;
+
+import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import createServer from './server.js';
+
+try {
+  const [configArg, portArg] = process.argv.slice(2);
+  if (!configArg) {
+    throw new TypeError('Usage: stillalive <config.json> [port]');
   }
-  var config = JSON.parse(resp.toString());
-  switch (len) {
-    case 3: return mail(config.key, config.api);
-    case 4: return mail(config.key, config.api, process.argv[3]);
-    default: throw new TypeError('wrong number of arguments');
-  }
-});
+
+  const configPath = resolve(configArg);
+  const config = JSON.parse((await readFile(configPath)).toString());
+  // The email provider config lives under `provider`.
+  const providerConfig = config.provider;
+
+  await createServer(config.key, providerConfig, portArg);
+} catch (err) {
+  console.error(err);
+  process.exit(1);
+}
