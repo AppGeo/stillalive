@@ -203,6 +203,24 @@ The `details` array lists every problem found in the `email` object, for example
 
 A valid payload needs a syntactically valid `from`, at least one valid `to`, a non-empty `subject`, and a `text` or `html` body. Provider config is validated when the server starts: a missing/invalid `key`, an unknown provider shape, a missing API `apiKey`, or missing SMTP `auth.user`/`auth.pass` throws a clear `TypeError` at startup.
 
+## listing active timers
+
+Send a `POST` to `host/active` with the server `key` to list every currently-armed timer. The key is checked the same way as the other routes -- an incorrect key responds with `400 { "error": "bad request" }`.
+
+```json
+{ "key": "server key (set in your config file)" }
+```
+
+The response lists each active timer by `id`, when it will fire (`expiresAt`, ISO 8601), and how long until it does (`msRemaining`):
+
+```json
+{
+  "active": [
+    { "id": "nightly-export", "expiresAt": "2026-06-23T20:29:14.509Z", "msRemaining": 599984 }
+  ]
+}
+```
+
 ## Migrating to v3
 
 v3 removes the legacy aliases that earlier versions silently accepted, in favor of a single canonical shape. Update any of the following:

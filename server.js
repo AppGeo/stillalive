@@ -65,19 +65,20 @@ export default async function createServer(key, emailConfig, listenPort) {
     const { id } = req.params;
     // Cancel any existing timer for this id so we restart the countdown clean.
     if (timeouts.has(id)) {
-      clearTimeout(timeouts.get(id));
+      clearTimeout(timeouts.get(id).timer);
       timeouts.delete(id);
     }
 
     // Schedule the alert. If this id checks in again first, the timer above is
-    // cleared and this callback never runs.
-    timeouts.set(
-      id,
-      setTimeout(() => {
+    // cleared and this callback never runs. We also record when it will fire so
+    // the /active route can report each timer's remaining time.
+    timeouts.set(id, {
+      expiresAt: Date.now() + ms,
+      timer: setTimeout(() => {
         sendEmail(body.email);
         timeouts.delete(id);
-      }, ms)
-    );
+      }, ms),
+    });
 
     res.json({ 'timeout set': body.interval });
   });
@@ -91,11 +92,28 @@ export default async function createServer(key, emailConfig, listenPort) {
 
     const { id } = req.params;
     if (timeouts.has(id)) {
-      clearTimeout(timeouts.get(id));
+      clearTimeout(timeouts.get(id).timer);
       timeouts.delete(id);
       return res.json({ cleared: true });
     }
     res.status(400).json({ error: 'no such timeout' });
+  });
+
+  // List every currently-armed watchdog timer with its id and when it will
+  // fire. Protected by the shared key, sent in the body like the other routes.
+  app.post('/active', (req, res) => {
+    const body = req.body ?? {};
+    if (!verifyKey(body.key)) {
+      return res.status(400).json({ error: 'bad request' });
+    }
+
+    const now = Date.now();
+    const active = Array.from(timeouts, ([id, timeout]) => ({
+      id,
+      expiresAt: new Date(timeout.expiresAt).toISOString(),
+      msRemaining: Math.max(0, timeout.expiresAt - now),
+    }));
+    res.json({ active });
   });
 
   console.log(`app is listening on ${port}`);
