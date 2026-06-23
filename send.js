@@ -64,6 +64,11 @@ export default async function createSender(config) {
       })
         .then(async (res) => {
           const data = await res.text();
+          // fetch only rejects on network errors, not HTTP error statuses, so
+          // a 4xx/5xx (e.g. an invalid key) would otherwise look like a send.
+          if (!res.ok) {
+            return cb(new Error(`Mandrill request failed (${res.status}): ${data}`));
+          }
           cb(null, data);
         })
         .catch(cb);
