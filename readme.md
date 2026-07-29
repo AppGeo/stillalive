@@ -47,6 +47,8 @@ app.get('/health', (_req, res) => {
 
 `port` is optional and defaults to `process.env.PORT`, then `3000`.
 
+If you don't want it to automatically listen, pass false as a port.
+
 ### As a CLI
 
 Point the `stillalive` command at a JSON config file:
