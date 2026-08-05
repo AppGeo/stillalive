@@ -66,12 +66,10 @@ const parseAddressList = (input) => {
 // a single normalized object, so the mappers never have to re-handle shorthand.
 const normalizeEmail = (email) => {
   email = email || {};
-  if (!email.from && email.from_email) {
-    email.from = email.from_email;
-  }
+  const from = email.from || (email.from_email ? { email: email.from_email, name: email.from_name } : undefined);
 
   return {
-    from: parseAddress(email.from),
+    from: parseAddress(from),
     to: parseAddressList(email.to),
     cc: parseAddressList(email.cc),
     bcc: parseAddressList(email.bcc),
