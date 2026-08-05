@@ -115,7 +115,9 @@ export default async function createServer(key, emailConfig, listenPort) {
     }));
     res.json({ active });
   });
-
+  if (listenPort === false) { 
+    return app;
+  }
   console.log(`app is listening on ${port}`);
   app.listen(port);
 
